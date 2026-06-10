@@ -154,5 +154,6 @@ print(result)
 * **상황 맞춤형 톤앤매너**
   * 다급한 비행기 시간 문의, 여유로운 시설 탐색 등 사용자의 발화 감정이나 의도에 맞추어 실제 공항 안내원과 대화하는 듯한 친절하고 명확한 톤앤매너의 가이드를 생성합니다.
 
-<img width="890" height="909" alt="image" src="https://github.com/user-attachments/assets/2b0160d6-fcdb-4128-86b9-a48c29194562" />
+<img width="890" height="907" alt="Screenshot_54" src="https://github.com/user-attachments/assets/705cd38a-5aca-4c34-8751-b57bdeb613e3" />
+
 
