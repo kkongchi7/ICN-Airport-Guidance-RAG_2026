@@ -30,35 +30,71 @@
 
 ---
 
-## 🏗 시스템 아키텍처 (Architecture)
+## 🛠 시스템 아키텍처 (System Architecture)
 
-시스템은 사용자가 자연어 질의를 입력하면 5가지 의도로 분류한 뒤, LangChain `RunnableBranch`를 통해 도메인별 검색 체인으로 라우팅합니다.
+본 시스템은 사용자의 자연어 질의를 분석하여 최적의 도메인 지식에 접근하고, 공간적 맥락을 결합하여 답변을 생성하는 3단계 파이프라인(의도 분류 ➔ 하이브리드 검색 ➔ LLM 답변 생성)으로 구성되어 있습니다.
 
-[ 사용자 질의 입력 ]
-│
-▼
-┌──────────────────────────────────────────────┐
-│  1. Intent Classification (Qwen2.5-3B)       │ ──► 오직 단일 대문자 카테고리만 반환
-└──────────────────────────────────────────────┘
-│
-├───────────────┬───────────────┬───────────────┐
-▼               ▼               ▼               ▼
-┌──────────────┐┌──────────────┐┌──────────────┐┌──────────────┐
-│  [FACILITY]  ││   [NEARBY]   ││   [FLIGHT]   ││    [BUS]     │
-│ 단순 시설위치││ H3 공간 인덱스││ 항공편 스케줄││ 공항버스 노선│
-│  ChromaDB    ││  지하/지상 층 ││   정밀 매칭  ││  경유지/시간 │
-└──────────────┘└──────────────┘└──────────────┘└──────────────┘
-│               │               │               │
-└───────────────┼───────────────┴───────────────┘
-▼
-┌──────────────────────────────────────────────┐
-│       2. Domain-Specific ChromaDB Query      │ ──► 벡터 및 메타데이터 하이브리드 검색
-└──────────────────────────────────────────────┘
-│
-▼
-┌──────────────────────────────────────────────┐
-│  3. Final Response Generation (Local LLM)   │ ──► 공항 안내원 톤앤매너로 답변 출력
-└──────────────────────────────────────────────┘
+```mermaid
+graph TD
+    %% 스타일 정의
+    classDef user fill:#e1f5fe,stroke:#0288d1,stroke-width:2px;
+    classDef router fill:#fff3e0,stroke:#f57c00,stroke-width:2px;
+    classDef search fill:#f1f8e9,stroke:#689f38,stroke-width:2px;
+    classDef llm fill:#ede7f6,stroke:#5e35b1,stroke-width:2px;
+    classDef db fill:#eceff1,stroke:#455a64,stroke-width:2px;
+
+    %% 노드 구성
+    User([사용자 질의 입력]) :::user
+    
+    subgraph Intent_Routing [1. 의도 분류 및 라우팅]
+        Router{LangChain LCEL<br/>의도 분류 라우터} :::router
+    end
+
+    subgraph Hybrid_Search_Engine [2. 도메인별 특화 검색 엔진]
+        FlightSearch[항공편 검색 모듈] :::search
+        BusSearch[대중교통 검색 모듈] :::search
+        FacilitySearch[시설물 의미 검색] :::search
+        NearbySearch[H3 기반 공간 검색] :::search
+    end
+
+    subgraph Data_Layer [데이터 레이어]
+        FlightDB[(SQLite / 항공편 DB)] :::db
+        BusDB[(SQLite / 교통 DB)] :::db
+        ChromaDB[(ChromaDB / 의미론적 Vector DB)] :::db
+        H3Index[\H3 Geo-Indexing / 공간 인덱스/] :::db
+    end
+
+    subgraph Generation_Layer [3. 컨텍스트 합성 및 답변 생성]
+        Prompt[프롬프트 엔지니어링<br/>Context + Prompt] :::llm
+        LLM[오픈소스 LLM<br/>Llama 3 / Mistral] :::llm
+        Answer([최종 안내 답변 제공]) :::user
+    end
+
+    %% 연결선 (흐름)
+    User --> Router
+    
+    Router -- "FLIGHT" --> FlightSearch
+    Router -- "BUS" --> BusSearch
+    Router -- "FACILITY" --> FacilitySearch
+    Router -- "NEARBY (공간 복합)" --> NearbySearch
+    Router -- "NONE" --> Prompt
+
+    FlightSearch --> FlightDB
+    BusSearch --> BusDB
+    FacilitySearch --> ChromaDB
+    NearbySearch --> H3Index
+    H3Index --> ChromaDB
+
+    FlightSearch --> Prompt
+    BusSearch --> Prompt
+    FacilitySearch --> Prompt
+    NearbySearch --> Prompt
+
+    Prompt --> LLM
+    LLM --> Answer
+
+    %% 텍스트 스타일링
+    linkStyle default stroke:#555,stroke-width:1px;
 
 
 ### 🎯 의도 분류 카테고리 (5종)
@@ -97,3 +133,26 @@ from langchain_core.runnables import RunnableLambda
 # 디버그 모드가 포함된 final_chain 호출
 result = final_chain.invoke({"query": "내일 출발하는 뉴욕 가는 비행기 찾아줘"})
 print(result)
+
+
+## 📱 모바일 애플리케이션 확장 구상 (Application Development Plan)
+
+본 RAG 파이프라인의 연구 성과를 확장하여 실제 공항 이용객이 현장에서 사용할 수 있는 **대화형 스마트폰 애플리케이션**의 세부 아키텍처와 UI/UX를 구상하고 있습니다.
+
+### 1) 시스템 및 데이터 아키텍처 확장
+* **로컬 경량화 데이터베이스 통합 (Android Room/SQLite)**
+  * 네트워크 연결이 불안정한 공항 내부 환경을 고려하여, 변동 주기가 길고 정형화된 대중교통(BUS) 및 시설 고유 정보 데이터는 모바일 기기 내부의 로컬 SQLite(Room DB)에 내장하여 오프라인 상태에서도 빠른 조회가 가능하도록 구조화합니다.
+* **하이브리드 동기화 시스템**
+  * 실시간 변경이 잦은 항공편 정보(FLIGHT) 및 LLM 기반의 복합 대화 처리는 경량화된 API를 통해 서버와 통신하고, 정적 데이터는 기기 로컬에서 처리하는 하이브리드 아키텍처를 지향합니다.
+
+### 2) 핵심 기능 및 인터페이스 (UI/UX)
+* **대화형 AI 타임라인 인터페이스**
+  * ChatGPT 및 Gemini와 유사한 직관적인 1:1 대화형 인터페이스를 채택하여 사용자가 자연어로 질문을 던지면 즉각적으로 맥락을 파악해 답변을 제시합니다.
+* **위치 기반 실시간 컨텍스트 매핑 (Spatial & Geo UI)**
+  * 사용자가 "나 지금 25번 게이트 앞인데 근처에 화장실이나 카페 있어?"라고 질문할 경우, 시스템 내부에 구현된 **H3 지오인덱싱(K-ring 연산)**을 활용해 반경 내 시설을 탐색합니다.
+  * 단순히 텍스트로만 나열하는 것이 아니라, 앱 화면 내에 실시간 미니 맵(Map UI)을 함께 연동하여 위치와 이동 경로를 시각적으로 직관적이게 시각화합니다.
+* **상황 맞춤형 톤앤매너**
+  * 다급한 비행기 시간 문의, 여유로운 시설 탐색 등 사용자의 발화 감정이나 의도에 맞추어 실제 공항 안내원과 대화하는 듯한 친절하고 명확한 톤앤매너의 가이드를 생성합니다.
+
+<img width="890" height="909" alt="image" src="https://github.com/user-attachments/assets/2b0160d6-fcdb-4128-86b9-a48c29194562" />
+
