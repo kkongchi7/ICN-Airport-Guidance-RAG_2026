@@ -154,6 +154,6 @@ print(result)
 * **상황 맞춤형 톤앤매너**
   * 다급한 비행기 시간 문의, 여유로운 시설 탐색 등 사용자의 발화 감정이나 의도에 맞추어 실제 공항 안내원과 대화하는 듯한 친절하고 명확한 톤앤매너의 가이드를 생성합니다.
 
-<img width="890" height="907" alt="Screenshot_54" src="https://github.com/user-attachments/assets/705cd38a-5aca-4c34-8751-b57bdeb613e3" />
+![image alt](https://github.com/kkongchi7/ICN-Airport-Guidance-RAG_2026/blob/main/Screenshot_54.png?raw=true)
 
 
